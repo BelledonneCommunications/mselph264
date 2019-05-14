@@ -20,13 +20,15 @@
 
 #include <array>
 #include <atomic>
+#include <memory>
+#include <string>
+#include <queue>
+#include <mutex>
+#include <thread>
 #include <mediastreamer2/mscodecutils.h>
 #include <mediastreamer2/msfilter.h>
 #include <mediastreamer2/msvideo.h>
 #include <mediastreamer2/rfc3984.h>
-#include <memory>
-#include <string>
-#include <thread>
 
 namespace h264camera {
 	class Usb100W04H;
@@ -76,6 +78,7 @@ public:
 
 private:
   void captureLoop();
+  MSQueue *getMSQueue();
 
   MSFilter *mFilter{nullptr};
   /// The camera device.  It will be set by the create_reader call in the
@@ -85,11 +88,14 @@ private:
   MSVideoConfiguration mVideoConf;
 
   std::thread mCaptureThread;
+  std::mutex mCaptureMutex;
   // The capture loop will stop, if this is false.
   std::atomic<bool> mRunning{false};
   // The capture loop will restart after exit, if this is true.
   std::atomic<bool> mReconfigure{true};
-  MSQueue mNalus;
+  std::queue<MSQueue *> mNalusQueue;
+  std::queue<MSQueue *> mAvailableNalus;
+
   Rfc3984Context *mPacker{nullptr};
   MSVideoStarter mVideoStarter;
   MSIFrameRequestsLimiterCtx mIFrameLimiter;

@@ -23,24 +23,6 @@
 namespace mselph264 {
 extern MSFilterDesc filter_description;
 extern MSWebCamDesc camera_description;
-
-// Mediastream2 will only tell there is codec support, if both encoder and
-// decoder filters are registered.
-MSFilterDesc fake_h264_decoder = {
-    MS_FILTER_PLUGIN_ID /*id*/,
-    "h264_fake_decoder" /*name*/,
-    "H.264 fake decoder to claim H264 support" /*text*/,
-    MS_FILTER_DECODER /*category*/,
-    "H264" /*enc_fmt*/,
-    1 /*ninputs*/,
-    0 /*noutputs*/,
-    nullptr /*init*/,
-    nullptr /*preprocess*/,
-    nullptr /*process*/,
-    nullptr /*postprocess*/,
-    nullptr /*uninit*/,
-    nullptr, /*methods*/
-    0 /*flags*/};
 } // namespace mselph264
 
 // This function is automatically called by Mediastreamer2.  The
@@ -51,7 +33,6 @@ extern "C" void libmselph264_init(MSFactory *factory) {
   // bctbx_set_log_level(BCTBX_LOG_DOMAIN, BCTBX_LOG_DEBUG);
   assert(factory);
   ms_factory_register_filter(factory, &mselph264::filter_description);
-  ms_factory_register_filter(factory, &mselph264::fake_h264_decoder);
   auto cam_manager = ms_factory_get_web_cam_manager(factory);
   assert(cam_manager);
   ms_web_cam_manager_register_desc(cam_manager, &mselph264::camera_description);

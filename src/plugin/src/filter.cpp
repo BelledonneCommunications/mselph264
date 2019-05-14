@@ -30,6 +30,7 @@
 #include "h264helper.hpp"
 #include "utils.hpp"
 
+
 using namespace h264camera;
 using namespace std::chrono_literals;
 
@@ -111,17 +112,27 @@ void State::captureLoop() {
 
       while (mRunning) {
         if (ms_video_starter_need_i_frame(&mVideoStarter,
-                                          mFilter->ticker->time) ||
-            ms_iframe_requests_limiter_iframe_requested(
-                &mIFrameLimiter, mFilter->ticker->time)) {
-          mDevice->xuResetIFrame();
-          ms_iframe_requests_limiter_notify_iframe_sent(&mIFrameLimiter,
-                                                        mFilter->ticker->time);
+					  mFilter->ticker->time) ||
+           ms_iframe_requests_limiter_iframe_requested(
+						       &mIFrameLimiter,
+						       mFilter->ticker->time)) {
+	   mDevice->xuResetIFrame();
+	   ms_iframe_requests_limiter_notify_iframe_sent(&mIFrameLimiter,
+							mFilter->ticker->time);
         }
 
         if (auto frame = mDevice->dequeue(200ms)) {
-          separate_h264_nalus(frame, &mNalus);
-          mDevice->queue(frame->index);
+	  MSQueue *nalus = getMSQueue();
+	  separate_h264_nalus(frame, nalus);
+
+	  mCaptureMutex.lock();
+	  if (!ms_queue_empty(nalus)) {
+	    mNalusQueue.push(nalus);
+	  } else {
+	    mAvailableNalus.push(nalus);
+	  }
+	  mCaptureMutex.unlock();
+	  mDevice->queue(frame->index);
         } else {
           bctbx_warning("Timeout when waiting for a new frame");
         }
@@ -137,11 +148,9 @@ void State::captureLoop() {
 
 void State::preprocess() {
   assert(mDevice);
-  ms_queue_init(&mNalus);
 
   mPacker = rfc3984_new_with_factory(mFilter->factory);
   rfc3984_set_mode(mPacker, 1);
-
   ms_video_starter_init(&mVideoStarter);
   ms_iframe_requests_limiter_init(&mIFrameLimiter, 1000);
 
@@ -152,8 +161,17 @@ void State::process() {
   // rtp uses a 90 kHz clockrate for video
   auto timestamp = mFilter->ticker->time * 90;
 
-  if (!ms_queue_empty(&mNalus)) {
-    rfc3984_pack(mPacker, &mNalus, mFilter->outputs[0], timestamp);
+  if (mCaptureMutex.try_lock()) {
+    while (!mNalusQueue.empty()) {
+      MSQueue *nalus = mNalusQueue.front();
+      if (!ms_queue_empty(nalus)) {
+        rfc3984_pack(mPacker, nalus, mFilter->outputs[0], timestamp);
+      }
+      mNalusQueue.pop();
+      ms_queue_flush(nalus);
+      mAvailableNalus.push(nalus);
+    }
+    mCaptureMutex.unlock();
   }
 }
 
@@ -164,7 +182,31 @@ void State::postprocess() {
 
   rfc3984_destroy(mPacker);
 
-  ms_queue_flush(&mNalus);
+  while (!mNalusQueue.empty()) {
+    MSQueue *nalus = mNalusQueue.front();
+    ms_queue_flush(nalus);
+    delete nalus;
+    mNalusQueue.pop();
+  }
+  while (!mAvailableNalus.empty()) {
+    MSQueue *nalus = mAvailableNalus.front();
+    ms_queue_flush(nalus);
+    delete nalus;
+    mAvailableNalus.pop();
+  }
+}
+
+MSQueue *State::getMSQueue() {
+  MSQueue *queue;
+
+  if (!mAvailableNalus.empty()) {
+    queue = mAvailableNalus.front();
+    mAvailableNalus.pop();
+  } else {
+    queue = new MSQueue();
+    ms_queue_init(queue);
+  }
+  return queue;
 }
 
 const MSVideoConfiguration *State::videoConfList() {
@@ -228,14 +270,6 @@ static MSFilterMethod filter_method_table[] = {
        enc_support->supported = (enc_support->pixfmt == MS_H264);
        return enc_support->pixfmt ? 0 : -1;
      }},
-    {MS_VIDEO_ENCODER_GET_CONFIGURATION_LIST,
-     [](MSFilter *f, void *arg) -> int {
-       bctbx_debug("Filter method: MS_VIDEO_ENCODER_GET_CONFIGURATION_LIST");
-       auto state = State::from(f);
-       auto vconfs = static_cast<const MSVideoConfiguration **>(arg);
-       *vconfs = state->videoConfList();
-       return 0;
-     }},
     {MS_VIDEO_ENCODER_GET_CONFIGURATION,
      [](MSFilter *f, void *arg) -> int {
        auto state = State::from(f);
@@ -295,23 +329,6 @@ static MSFilterMethod filter_method_table[] = {
        *accelerated = true;
        return 0;
      }},
-    {MS_FILTER_GET_VIDEO_SIZE,
-     [](MSFilter *f, void *arg) -> int {
-       bctbx_debug("Filter method: MS_FILTER_GET_VIDEO_SIZE");
-       auto state = State::from(f);
-       auto vsize = static_cast<MSVideoSize *>(arg);
-       *vsize = state->videoConf().vsize;
-       return 0;
-     }},
-    {MS_FILTER_GET_FPS,
-     [](MSFilter *f, void *arg) -> int {
-       bctbx_debug("Filter method: MS_FILTER_GET_FPS");
-       auto state = State::from(f);
-       auto fps = static_cast<float *>(arg);
-       *fps = state->videoConf().fps;
-       return 0;
-     }},
-
     {0, nullptr}};
 
 // Struct with all filter related callbacks and information.  It is
