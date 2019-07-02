@@ -1,4 +1,4 @@
-find_package(BcToolbox REQUIRED)
+find_package(bctoolbox REQUIRED)
 find_package(Mediastreamer2 REQUIRED)
 
 add_library(mselph264 MODULE
