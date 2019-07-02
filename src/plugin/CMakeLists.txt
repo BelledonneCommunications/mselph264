@@ -34,9 +34,9 @@ install(TARGETS mselph264
 
 if(ENABLE_TEST)
     find_package(Catch2 REQUIRED)
-    find_package(ORTP REQUIRED)
+    find_package(ortp REQUIRED)
     enable_testing()
-  
+
     add_executable(plugin_test
         test/helper.cpp
         test/helper.hpp
