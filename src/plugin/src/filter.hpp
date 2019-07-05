@@ -74,7 +74,7 @@ public:
        MS_VIDEO_CONF(256000, 800000, VGA, 15, 0),
        MS_VIDEO_CONF(128000, 512000, VGA, 10, 0),
        MS_VIDEO_CONF(100000, 380000, QVGA, 10, 0),
-       MS_VIDEO_CONF(0, 0, UNKNOWN, 0, 0)}};
+       MS_VIDEO_CONF(0, 150000, QCIF, 10, 0)}};
 
 private:
   void captureLoop();
