@@ -270,6 +270,14 @@ static MSFilterMethod filter_method_table[] = {
        enc_support->supported = (enc_support->pixfmt == MS_H264);
        return enc_support->pixfmt ? 0 : -1;
      }},
+    {MS_VIDEO_ENCODER_GET_CONFIGURATION_LIST,
+     [](MSFilter *f, void *arg) -> int {
+       bctbx_debug("Filter method: MS_VIDEO_ENCODER_GET_CONFIGURATION_LIST");
+       auto state = State::from(f);
+       auto vconfs = static_cast<const MSVideoConfiguration **>(arg);
+       *vconfs = state->videoConfList();
+       return 0;
+     }},
     {MS_VIDEO_ENCODER_GET_CONFIGURATION,
      [](MSFilter *f, void *arg) -> int {
        auto state = State::from(f);
