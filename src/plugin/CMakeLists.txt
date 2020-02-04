@@ -1,4 +1,4 @@
-find_package(BcToolbox REQUIRED)
+find_package(bctoolbox REQUIRED)
 find_package(Mediastreamer2 REQUIRED)
 
 add_library(mselph264 MODULE
@@ -34,9 +34,9 @@ install(TARGETS mselph264
 
 if(ENABLE_TEST)
     find_package(Catch2 REQUIRED)
-    find_package(ORTP REQUIRED)
+    find_package(ortp REQUIRED)
     enable_testing()
-  
+
     add_executable(plugin_test
         test/helper.cpp
         test/helper.hpp
